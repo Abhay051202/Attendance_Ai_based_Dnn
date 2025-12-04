@@ -380,7 +380,11 @@ class FaceAttendancePro:
         if self.current_view == "dashboard":
             # Process Camera 1
             if frames[0] is not None:
-                annotated_frame1, _, _, messages1 = self.processor.process_frame(frames[0], mark_attendance_callback=self.tracker.process_recognized_face)
+                annotated_frame1, _, _, messages1 = self.processor.process_frame(
+                    frames[0], 
+                    mark_attendance_callback=self.tracker.process_recognized_face,
+                    unknown_person_callback=self.tracker.process_unknown_person
+                )
                 for msg in messages1: self.log_list.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {msg}")
                 
                 if not self.is_paused:
@@ -394,7 +398,11 @@ class FaceAttendancePro:
 
             # Process Camera 2
             if len(frames) > 1 and frames[1] is not None:
-                annotated_frame2, _, _, messages2 = self.processor2.process_frame(frames[1], mark_attendance_callback=self.tracker.process_recognized_face)
+                annotated_frame2, _, _, messages2 = self.processor2.process_frame(
+                    frames[1], 
+                    mark_attendance_callback=self.tracker.process_recognized_face,
+                    unknown_person_callback=self.tracker.process_unknown_person
+                )
                 for msg in messages2: self.log_list.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {msg}")
                 
                 if not self.is_paused:

@@ -4,13 +4,21 @@ Configuration file for Face Recognition Attendance System
 
 # --- MYSQL CONFIGURATION ---
 
+# MYSQL_CONFIG = {
+#     'user': 'root',           # Username
+#     'password': 'Root@123',   # <--- MySQL password here
+#     'host': 'localhost',      # Hostname
+#     'port': 3306,             # Port
+#     'database': 'demo', # The name of the DB we will create
+#     'raise_on_warnings': True
+# }
+
 MYSQL_CONFIG = {
-    'user': 'root',           # Username
-    'password': 'Root@123',   # <--- MySQL password here
-    'host': 'localhost',      # Hostname
-    'port': 3306,             # Port
-    'database': 'demo', # The name of the DB we will create
-    'raise_on_warnings': True
+    'user': 'team',
+    'password': 'Team@123',
+    'host': '192.168.1.106',   # Your PC IP
+    'port': 3306,
+    'database': 'demo',
 }
 
 

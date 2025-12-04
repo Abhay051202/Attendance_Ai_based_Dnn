@@ -107,3 +107,125 @@ class AttendanceAPI:
             return []
         finally:
             conn.close()
+
+    def get_unknown_face(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM unknown_faces WHERE id = %s", (record_id,))
+            return cursor.fetchone()
+        finally:
+            conn.close()
+
+    def delete_unknown_face(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM unknown_faces WHERE id = %s", (record_id,))
+            conn.commit()
+            return True, "Deleted successfully"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    # --- ATTENDANCE TABLE CRUD ---
+
+    def create_attendance(self, person_id, date_str, arrival, leaving, status):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO attendance (person_id, date, arrival_time, leaving_time, status)
+                VALUES (%s, %s, %s, %s, %s)
+            """, (person_id, date_str, arrival, leaving, status))
+            conn.commit()
+            return True, "Attendance created"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_attendance_by_id(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM attendance WHERE id = %s", (record_id,))
+            return cursor.fetchone()
+        finally:
+            conn.close()
+
+    def update_attendance(self, record_id, arrival, leaving, status):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                UPDATE attendance 
+                SET arrival_time=%s, leaving_time=%s, status=%s
+                WHERE id=%s
+            """, (arrival, leaving, status, record_id))
+            conn.commit()
+            return True, "Attendance updated"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def delete_attendance(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM attendance WHERE id=%s", (record_id,))
+            conn.commit()
+            return True, "Attendance deleted"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    # --- FACE LOGS CRUD ---
+
+    def create_face_log(self, person_id, name, date_str, time_str):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO face_logs (person_id, name, date, time)
+                VALUES (%s, %s, %s, %s)
+            """, (person_id, name, date_str, time_str))
+            conn.commit()
+            return True, "Log created"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()
+
+    def get_all_logs(self, limit=100):
+        conn = self.db.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM face_logs ORDER BY id DESC LIMIT %s", (limit,))
+            return cursor.fetchall()
+        finally:
+            conn.close()
+
+    def get_face_log(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor(dictionary=True)
+        try:
+            cursor.execute("SELECT * FROM face_logs WHERE id=%s", (record_id,))
+            return cursor.fetchone()
+        finally:
+            conn.close()
+
+    def delete_face_log(self, record_id):
+        conn = self.db.get_connection()
+        cursor = conn.cursor()
+        try:
+            cursor.execute("DELETE FROM face_logs WHERE id=%s", (record_id,))
+            conn.commit()
+            return True, "Log deleted"
+        except Exception as e:
+            return False, str(e)
+        finally:
+            conn.close()

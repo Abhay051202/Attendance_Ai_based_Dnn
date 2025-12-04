@@ -105,6 +105,88 @@ def get_stats():
 def get_unknown_faces():
     return jsonify(api.get_unknown_faces())
 
+@app.route('/api/unknown/<record_id>', methods=['GET'])
+def get_unknown_face(record_id):
+    rec = api.get_unknown_face(record_id)
+    if rec: return jsonify(rec)
+    return jsonify({"error": "Not found"}), 404
+
+@app.route('/api/unknown/<record_id>', methods=['DELETE'])
+def delete_unknown_face(record_id):
+    success, msg = api.delete_unknown_face(record_id)
+    if success: return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
+# --- ATTENDANCE ROUTES ---
+
+@app.route('/api/attendance', methods=['POST'])
+def create_attendance():
+    data = request.json
+    if not data: return jsonify({"error": "No data"}), 400
+    success, msg = api.create_attendance(
+        data.get('person_id'),
+        data.get('date'),
+        data.get('arrival_time'),
+        data.get('leaving_time'),
+        data.get('status', 'Present')
+    )
+    if success: return jsonify({"message": msg}), 201
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/attendance/<record_id>', methods=['GET'])
+def get_attendance(record_id):
+    rec = api.get_attendance_by_id(record_id)
+    if rec: return jsonify(rec)
+    return jsonify({"error": "Not found"}), 404
+
+@app.route('/api/attendance/<record_id>', methods=['PUT'])
+def update_attendance(record_id):
+    data = request.json
+    success, msg = api.update_attendance(
+        record_id,
+        data.get('arrival_time'),
+        data.get('leaving_time'),
+        data.get('status')
+    )
+    if success: return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/attendance/<record_id>', methods=['DELETE'])
+def delete_attendance(record_id):
+    success, msg = api.delete_attendance(record_id)
+    if success: return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
+# --- LOGS ROUTES ---
+
+@app.route('/api/logs', methods=['GET'])
+def get_logs():
+    return jsonify(api.get_all_logs())
+
+@app.route('/api/logs', methods=['POST'])
+def create_log():
+    data = request.json
+    success, msg = api.create_face_log(
+        data.get('person_id'),
+        data.get('name'),
+        data.get('date'),
+        data.get('time')
+    )
+    if success: return jsonify({"message": msg}), 201
+    return jsonify({"error": msg}), 400
+
+@app.route('/api/logs/<record_id>', methods=['GET'])
+def get_log(record_id):
+    rec = api.get_face_log(record_id)
+    if rec: return jsonify(rec)
+    return jsonify({"error": "Not found"}), 404
+
+@app.route('/api/logs/<record_id>', methods=['DELETE'])
+def delete_log(record_id):
+    success, msg = api.delete_face_log(record_id)
+    if success: return jsonify({"message": msg})
+    return jsonify({"error": msg}), 400
+
 if __name__ == '__main__':
     print("Starting API Server on http://localhost:5000")
     app.run(debug=True, port=5000)

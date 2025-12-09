@@ -48,7 +48,7 @@ FACE_ENCODINGS_PATH = 'data/face_encodings.pkl'
 UNKNOWN_FACES_DIR = 'data/unknown_faces' 
 
 # Face Recognition Settings
-SIMILARITY_THRESHOLD = 0.6  
+SIMILARITY_THRESHOLD = 0.5  
 DETECTION_SIZE = (1024, 1024) 
 FACE_DETECTION_MODEL = 'buffalo_l' 
 

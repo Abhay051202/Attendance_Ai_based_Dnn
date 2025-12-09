@@ -20,7 +20,8 @@ from core.face_recognition import FaceRecognitionHandler
 from core.attendance_tracker import AttendanceTracker
 from core.video_processor import VideoProcessor
 from core.registration import RegistrationModule
-from core.utils import Utils, ThreadedCamera
+from core.utils import Utils
+from core.camera import ThreadedCamera
 from config.config import get_config
 
 # --- THEME COLORS ---
@@ -393,6 +394,10 @@ class FaceAttendancePro:
         processor = self.processor if cam_index == 0 else self.processor2
         cap = self.caps[cam_index]
         
+        frame_count = 0
+        SKIP_FRAMES = 4 # Process 1 out of 5 frames (CPU Optimization)
+        last_results = None # Memory for skipped frames
+        
         while self.threads_running and self.is_running:
             if cap is None: break
             
@@ -402,15 +407,27 @@ class FaceAttendancePro:
                 time.sleep(0.01)
                 continue
             
-            # Run Heavy Processing
+            # Run Heavy Processing or Skip
             # Returns: (detections, labels, faces, messages)
             try:
-                detections, labels, faces, messages = processor.process_frame(
-                    frame, 
-                    mark_attendance_callback=self.tracker.process_recognized_face,
-                    unknown_person_callback=self.tracker.process_unknown_person
-                )
+                frame_count += 1
                 
+                # LOGIC: Process only every (SKIP_FRAMES + 1)th frame
+                if frame_count % (SKIP_FRAMES + 1) == 0:
+                    detections, labels, faces, messages = processor.process_frame(
+                        frame, 
+                        mark_attendance_callback=self.tracker.process_recognized_face,
+                        unknown_person_callback=self.tracker.process_unknown_person
+                    )
+                    last_results = (detections, labels, faces)
+                else:
+                    # Skip frame: use last known results (or empty if None)
+                    if last_results:
+                        detections, labels, faces = last_results
+                    else:
+                        detections, labels, faces = [], [], []
+                    messages = []
+
                 # Queue messages for main thread
                 for msg in messages:
                     self.log_queue.put(msg)
@@ -504,14 +521,30 @@ class FaceAttendancePro:
         if not pid or not name: messagebox.showwarning("Missing", "ID/Name required"); return
         
         # 1. Open Cam, Snap, Close
-        # Use Camera 0 for registration by default
-        try: idx = 0 
-        except: idx = 0
-        temp_cap = cv2.VideoCapture(idx)
+        # Use configured camera source (RTSP or ID)
+        conf = get_config()
+        source = conf.get('webcam_index', 0)
+        
+        print(f"Capturing registration photo from: {source}")
+        
+        try:
+            temp_cap = cv2.VideoCapture(source)
+            if not temp_cap.isOpened():
+                # Fallback to local webcam if configured source fails
+                print("Configured source failed, trying default camera 0...")
+                temp_cap = cv2.VideoCapture(0)
+        except Exception as e:
+            print(f"Camera error: {e}")
+            temp_cap = cv2.VideoCapture(0)
+            
         if not temp_cap.isOpened(): messagebox.showerror("Error", "Could not open camera"); return
-        for _ in range(5): ret, frame = temp_cap.read() # Warmup
+        
+        # Read a few frames to let auto-exposure settle
+        for _ in range(10): 
+            ret, frame = temp_cap.read()
+            
         temp_cap.release()
-        if not ret: messagebox.showerror("Error", "Failed capture"); return
+        if not ret: messagebox.showerror("Error", "Failed capture from source"); return
         img = frame
         
         # 2. Show Preview

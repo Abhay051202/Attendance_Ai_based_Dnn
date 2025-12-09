@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, date
 import os
 import csv
 import sys
+import re
 
 # --- IMPORT BACKEND ---
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -17,7 +18,8 @@ from core.face_recognition import FaceRecognitionHandler
 from core.attendance_tracker import AttendanceTracker
 from core.video_processor import VideoProcessor
 from core.registration import RegistrationModule
-from core.utils import Utils
+from core.utils import Utils, ThreadedCamera
+from config.config import get_config
 
 # --- THEME COLORS ---
 COLORS = {
@@ -111,12 +113,18 @@ class FaceAttendancePro:
         self.card_present = self.create_stat_card(st, "Present Today", "0", "check")
         
         c = tk.Frame(self.frame_dashboard, bg=COLORS['card'], padx=10, pady=10); c.pack(fill="x", pady=(0, 10))
+        
+        # Camera Options: Channels 1-16 (RTSP) + Webcams 0-4 (Local)
+        cam_options = [f"Channel {i}" for i in range(1, 17)] + [f"Webcam {i}" for i in range(5)]
+        
         tk.Label(c, text="Cam 1:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left")
-        self.camera_source_1 = tk.StringVar(value="Camera 0")
-        self.cam_combo_1 = ttk.Combobox(c, textvariable=self.camera_source_1, values=[f"Camera {i}" for i in range(5)], width=8); self.cam_combo_1.pack(side="left", padx=5)
+        self.camera_source_1 = tk.StringVar(value="Channel 1")
+        self.cam_combo_1 = ttk.Combobox(c, textvariable=self.camera_source_1, values=cam_options, width=15); self.cam_combo_1.pack(side="left", padx=5)
+        
         tk.Label(c, text="Cam 2:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left", padx=(10,0))
-        self.camera_source_2 = tk.StringVar(value="Camera 1")
-        self.cam_combo_2 = ttk.Combobox(c, textvariable=self.camera_source_2, values=[f"Camera {i}" for i in range(5)], width=8); self.cam_combo_2.pack(side="left", padx=5)
+        self.camera_source_2 = tk.StringVar(value="Channel 2")
+        self.cam_combo_2 = ttk.Combobox(c, textvariable=self.camera_source_2, values=cam_options, width=15); self.cam_combo_2.pack(side="left", padx=5)
+        
         self.btn_cam_toggle = ModernButton(c, text="START CAMERAS", command=self.toggle_camera, bg=COLORS['accent'], fg="#1e1e2e"); self.btn_cam_toggle.pack(side="right")
         self.btn_pause = ModernButton(c, text="PAUSE", command=self.toggle_pause, bg=COLORS['warning'], fg="#1e1e2e", state="disabled"); self.btn_pause.pack(side="right", padx=10)
         
@@ -295,19 +303,51 @@ class FaceAttendancePro:
             # Try to connect to Camera 0 and Camera 1
             self.caps = []
             
+            # Helper to update channel in RTSP URL
+            def get_rtsp_url_with_channel(original_url, channel_num):
+                if isinstance(original_url, str) and "rtsp" in original_url:
+                    # Replace channel=X with channel=channel_num
+                    new_url = re.sub(r'channel=\d+', f'channel={channel_num}', original_url)
+                    print(f"Connecting to RTSP: ...{new_url[-20:]}") # Log last part for privacy/check
+                    return new_url
+                return original_url
+
+            def get_source_from_selection(selection_str):
+                """Parse dropdown selection to get video source"""
+                try:
+                    if "Channel" in selection_str:
+                        # RTSP Configured Camera
+                        channel_num = selection_str.split(" ")[1]
+                        base_url = get_config()['webcam_index']
+                        final_url = get_rtsp_url_with_channel(base_url, channel_num)
+                        return ThreadedCamera(final_url)
+                    
+                    elif "Webcam" in selection_str:
+                        # Local Webcam
+                        idx = int(selection_str.split(" ")[1])
+                        return cv2.VideoCapture(idx)
+                    
+                    else:
+                        # Fallback for old values or manual input
+                        return cv2.VideoCapture(0)
+                        
+                except Exception as e:
+                    print(f"Error parsing source '{selection_str}': {e}")
+                    return None
+
             # Camera 1
-            try: idx1 = int(self.camera_source_1.get().split(" ")[1])
-            except: idx1 = 0
-            cap1 = cv2.VideoCapture(idx1)
-            if cap1.isOpened(): self.caps.append(cap1)
-            else: self.caps.append(None); print(f"Camera {idx1} failed")
+            val1 = self.camera_source_1.get()
+            cap1 = get_source_from_selection(val1)
+            
+            if cap1 and cap1.isOpened(): self.caps.append(cap1)
+            else: self.caps.append(None); print(f"Camera Source 1 ({val1}) failed")
             
             # Camera 2
-            try: idx2 = int(self.camera_source_2.get().split(" ")[1])
-            except: idx2 = 1
-            cap2 = cv2.VideoCapture(idx2)
-            if cap2.isOpened(): self.caps.append(cap2)
-            else: self.caps.append(None); print(f"Camera {idx2} failed")
+            val2 = self.camera_source_2.get()
+            cap2 = get_source_from_selection(val2)
+            
+            if cap2 and cap2.isOpened(): self.caps.append(cap2)
+            else: self.caps.append(None); print(f"Camera Source 2 ({val2}) failed")
 
             if all(c is None for c in self.caps):
                 messagebox.showerror("Error", "No cameras found"); return

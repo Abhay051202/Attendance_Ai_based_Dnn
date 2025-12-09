@@ -21,7 +21,6 @@ MYSQL_CONFIG = {
     'database': 'demo',
 }
 
-
 # --- SMTP EMAIL CONFIGURATION ---
 
 SMTP_CONFIG = {
@@ -50,7 +49,7 @@ UNKNOWN_FACES_DIR = 'data/unknown_faces'
 
 # Face Recognition Settings
 SIMILARITY_THRESHOLD = 0.6  
-DETECTION_SIZE = (640, 640) 
+DETECTION_SIZE = (1024, 1024) 
 FACE_DETECTION_MODEL = 'buffalo_l' 
 
 # Execution Providers (GPU/CPU)
@@ -70,10 +69,16 @@ AUTO_MARK_ARRIVAL = True
 AUTO_MARK_LEAVING = True          
 
 # Video Processing Settings
-WEBCAM_INDEX = 0                  
+# Video Processing Settings
+# WEBCAM_INDEX = 0   
+WEBCAM_INDEX = "rtsp://admin:Prosper%404321@192.168.1.240:554/cam/realmonitor?channel=8&subtype=0"               
 DISPLAY_LANDMARKS = True          
 DISPLAY_FPS = True                
-DISPLAY_INFO_PANEL = True         
+DISPLAY_INFO_PANEL = True
+
+# Performance Optimization
+PROCESS_EVERY_N_FRAMES = 5    # Run Face AI every Nth frame (Increase if laggy)
+RESIZE_FACTOR = 0.5           # Resize frame for AI (0.5 = 50% size, faster)         
 
 # Annotation Settings
 BOX_THICKNESS = 2
@@ -118,9 +123,12 @@ def get_config():
         'lost_track_buffer': LOST_TRACK_BUFFER,
         'frame_rate': FRAME_RATE,
         'attendance_cooldown': ATTENDANCE_COOLDOWN_SECONDS,
+        'start_cooldown': ATTENDANCE_COOLDOWN_SECONDS, # Alias for clarity
         'webcam_index': WEBCAM_INDEX,
         'display_landmarks': DISPLAY_LANDMARKS,
         'display_fps': DISPLAY_FPS,
+        'process_every_n_frames': PROCESS_EVERY_N_FRAMES,
+        'resize_factor': RESIZE_FACTOR,
     }
 
 def validate_config():

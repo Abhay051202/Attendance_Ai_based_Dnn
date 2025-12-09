@@ -1,18 +1,33 @@
 import numpy as np
+import pickle
+import os
 from insightface.app import FaceAnalysis
 
+# ADD THIS LINE at the top to import configuration variables
+from config.config import SIMILARITY_THRESHOLD, FACE_DETECTION_MODEL, DETECTION_SIZE 
+# You should also update SIMILARITY_THRESHOLD here if you are using db_manager
+
 class FaceRecognitionHandler:
-    def __init__(self, db_manager, similarity_threshold=0.6):
+    # You can remove similarity_threshold=0.6 from the arguments and use the config value
+    def __init__(self, db_manager): 
         # Initialize InsightFace
         self.app = FaceAnalysis(
-            name='buffalo_l', 
+            # Ensure it uses the variable from config.py
+            name=FACE_DETECTION_MODEL, 
             providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
         )
-        self.app.prepare(ctx_id=0, det_size=(640, 640))
+        
+        # CHANGE THIS LINE: Use the DETECTION_SIZE variable from config.py
+        self.app.prepare(ctx_id=0, det_size=DETECTION_SIZE)
         
         self.db_manager = db_manager
-        self.similarity_threshold = similarity_threshold
+        # Use the config threshold for consistency
+        self.similarity_threshold = SIMILARITY_THRESHOLD 
         self.registered_faces = self.load_face_encodings()
+
+
+
+
     
     def detect_faces(self, frame):
         """Detect faces in a frame"""

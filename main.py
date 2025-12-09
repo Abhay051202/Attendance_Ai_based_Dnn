@@ -7,6 +7,7 @@ from database.database import DatabaseManager
 from core.face_recognition import FaceRecognitionHandler
 from core.attendance_tracker import AttendanceTracker
 from core.video_processor import VideoProcessor
+from config.config import get_config
 
 # Filter warnings to keep console clean
 warnings.filterwarnings("ignore")
@@ -37,10 +38,12 @@ class AttendanceSystem:
     
     def start_automatic_attendance(self):
         """Run the main attendance system"""
-        cap = cv2.VideoCapture(0)
+        source = get_config()['webcam_index']
+        print(f"Connecting to camera: {source}")
+        cap = cv2.VideoCapture(source)
         
         if not cap.isOpened():
-            print("Error: Could not open webcam")
+            print(f"Error: Could not open webcam ({source})")
             return
         
         print("\n" + "="*60)

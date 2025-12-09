@@ -304,3 +304,60 @@ class ColorPrint:
     def info(text):
         """Print info message in blue"""
         ColorPrint.print(f"ℹ {text}", 'blue')
+
+import threading
+import cv2
+import time
+
+class ThreadedCamera:
+    """
+    Reads frames in a separate thread to prevent RTSP lag.
+    Always returns the most recent frame.
+    """
+    def __init__(self, src=0):
+        self.src = src
+        self.cap = cv2.VideoCapture(self.src)
+        
+        # Check if camera opened successfully
+        if not self.cap.isOpened():
+            self.status = False
+            self.frame = None
+            return
+            
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1) # Minimize buffer
+        self.status, self.frame = self.cap.read()
+        self.stop_signal = False
+        
+        # Start the thread
+        self.thread = threading.Thread(target=self.update, args=())
+        self.thread.daemon = True
+        self.thread.start()
+        
+    def update(self):
+        """Thread worker function"""
+        while True:
+            if self.stop_signal:
+                return
+            
+            if self.cap.isOpened():
+                status, frame = self.cap.read()
+                if status:
+                    self.frame = frame
+                    self.status = True
+                else:
+                    self.status = False
+                    time.sleep(0.1) # Wait a bit if read fails
+            else:
+                time.sleep(0.1)
+                
+    def read(self):
+        """Return the latest frame"""
+        return self.status, self.frame
+    
+    def isOpened(self):
+        return self.cap.isOpened()
+        
+    def release(self):
+        self.stop_signal = True
+        self.thread.join(timeout=1.0)
+        self.cap.release()

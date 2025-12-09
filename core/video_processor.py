@@ -42,26 +42,56 @@ class VideoProcessor:
 
     def process_frame(self, frame, mark_attendance_callback=None, unknown_person_callback=None):
         """Process a single frame and return annotated frame with detections"""
-        # Detect faces
-        faces = self.face_handler.detect_faces(frame)
+        from config.config import PROCESS_EVERY_N_FRAMES, RESIZE_FACTOR
         
-        # Format detections for ByteTrack
-        if len(faces) > 0:
-            xyxy = np.array([face.bbox for face in faces])
-            confidence = np.array([face.det_score for face in faces])
-            class_id = np.zeros(len(faces), dtype=int)
+        # Initialize frame counter if not exists
+        if not hasattr(self, 'frame_count'):
+            self.frame_count = 0
+            self.last_detections = sv.Detections.empty()
+            self.last_faces = []
+        
+        self.frame_count += 1
+        
+        # --- PROCESS EVERY Nth FRAME ---
+        if self.frame_count % PROCESS_EVERY_N_FRAMES == 0:
             
-            detections = sv.Detections(
-                xyxy=xyxy, 
-                confidence=confidence, 
-                class_id=class_id
-            )
+            # 1. Resize for faster inference
+            small_frame = cv2.resize(frame, (0, 0), fx=RESIZE_FACTOR, fy=RESIZE_FACTOR)
+            
+            # 2. Detect faces on small frame
+            faces = self.face_handler.detect_faces(small_frame)
+            
+            # 3. Scale back coordinates to original size
+            for face in faces:
+                face.bbox = face.bbox / RESIZE_FACTOR
+                if hasattr(face, 'kps') and face.kps is not None:
+                    face.kps = face.kps / RESIZE_FACTOR
+            
+            self.last_faces = faces
+            
+            # 4. Format detections for ByteTrack
+            if len(faces) > 0:
+                xyxy = np.array([face.bbox for face in faces])
+                confidence = np.array([face.det_score for face in faces])
+                class_id = np.zeros(len(faces), dtype=int)
+                
+                detections = sv.Detections(
+                    xyxy=xyxy, 
+                    confidence=confidence, 
+                    class_id=class_id
+                )
+            else:
+                detections = sv.Detections.empty()
+            
+            # 5. Update tracker
+            tracked_detections = self.tracker.update_with_detections(detections)
+            self.last_detections = tracked_detections
+            
         else:
-            detections = sv.Detections.empty()
-        
-        # Update tracker
-        tracked_detections = self.tracker.update_with_detections(detections)
-        
+            # --- SKIP FRAME: USE LAST KNOWN DETECTIONS ---
+            faces = self.last_faces
+            tracked_detections = self.last_detections
+
         if tracked_detections.tracker_id is not None:
             tracked_detections.class_id = tracked_detections.tracker_id.astype(int)
         
@@ -70,6 +100,8 @@ class VideoProcessor:
         
         # Loop through tracked detections
         for i in range(len(tracked_detections)):
+            if tracked_detections.tracker_id is None: continue
+            
             tracker_id = tracked_detections.tracker_id[i]
             current_bbox = tracked_detections.xyxy[i]
             
@@ -78,64 +110,68 @@ class VideoProcessor:
                 person_id, person_name = self.tracker_id_to_person[tracker_id]
                 label = f"{person_name} ({person_id})"
                 
-                # Update attendance
-                if mark_attendance_callback:
+                # Update attendance (Only on processed frames to save DB calls)
+                if self.frame_count % PROCESS_EVERY_N_FRAMES == 0 and mark_attendance_callback:
                     success, message = mark_attendance_callback(person_id, person_name)
                     if success and message and "Tracking" not in message:
                         messages.append(message)
 
             # --- CASE 2: NEW TRACK (We need to recognize the face) ---
             else:
-                best_face = None
-                max_iou = 0.0
-                
-                # Find matching face detection
-                for face in faces:
-                    iou = self.calculate_iou(current_bbox, face.bbox)
-                    if iou > 0.5 and iou > max_iou:
-                        max_iou = iou
-                        best_face = face
-
-                if best_face:
-                    # Check against the pickle file
-                    person_id, person_name, similarity = self.face_handler.recognize_face(best_face.embedding)
-                    
-                    if person_id:
-                        self.tracker_id_to_person[tracker_id] = (person_id, person_name)
-                        label = f"{person_name} ({person_id})"
-                        
-                        if mark_attendance_callback:
-                            success, message = mark_attendance_callback(person_id, person_name)
-                            if success and message:
-                                messages.append(message)
-                    else:
-                        label = f"Unknown #{tracker_id}"
-                        
-                        # --- CASE 3: UNKNOWN PERSON LOGGING ---
-                        if unknown_person_callback and tracker_id not in self.logged_unknown_ids:
-                            # 1. Save Snapshot
-                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
-                            filename = f"unknown_{timestamp}.jpg"
-                            filepath = os.path.join(UNKNOWN_FACES_DIR, filename)
-                            
-                            # Save the face crop
-                            x1, y1, x2, y2 = map(int, current_bbox)
-                            h, w, _ = frame.shape
-                            x1, y1 = max(0, x1), max(0, y1)
-                            x2, y2 = min(w, x2), min(h, y2)
-                            
-                            face_crop = frame[y1:y2, x1:x2]
-                            
-                            if face_crop.size > 0:
-                                cv2.imwrite(filepath, face_crop)
-                                
-                                # 2. Log to DB
-                                unknown_person_callback(filepath, best_face.embedding)
-                                self.logged_unknown_ids.add(tracker_id)
-                                messages.append(f"Logged Unknown Person #{tracker_id}")
+                # Only run recognition on the processed frame to save resources
+                if self.frame_count % PROCESS_EVERY_N_FRAMES != 0:
+                     label = f"Tracking #{tracker_id}"
                 else:
-                    label = f"Tracking #{tracker_id}"
+                    best_face = None
+                    max_iou = 0.0
+                    
+                    # Find matching face detection
+                    for face in faces:
+                        iou = self.calculate_iou(current_bbox, face.bbox)
+                        if iou > 0.5 and iou > max_iou:
+                            max_iou = iou
+                            best_face = face
 
+                    if best_face:
+                        # Check against the pickle file
+                        person_id, person_name, similarity = self.face_handler.recognize_face(best_face.embedding)
+                        
+                        if person_id:
+                            self.tracker_id_to_person[tracker_id] = (person_id, person_name)
+                            label = f"{person_name} ({person_id})"
+                            
+                            if mark_attendance_callback:
+                                success, message = mark_attendance_callback(person_id, person_name)
+                                if success and message:
+                                    messages.append(message)
+                        else:
+                            label = f"Unknown #{tracker_id}"
+                            
+                            # --- CASE 3: UNKNOWN PERSON LOGGING ---
+                            if unknown_person_callback and tracker_id not in self.logged_unknown_ids:
+                                # 1. Save Snapshot
+                                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                                filename = f"unknown_{timestamp}.jpg"
+                                filepath = os.path.join(UNKNOWN_FACES_DIR, filename)
+                                
+                                # Save the face crop
+                                x1, y1, x2, y2 = map(int, current_bbox)
+                                h, w, _ = frame.shape
+                                x1, y1 = max(0, x1), max(0, y1)
+                                x2, y2 = min(w, x2), min(h, y2)
+                                
+                                face_crop = frame[y1:y2, x1:x2]
+                                
+                                if face_crop.size > 0:
+                                    cv2.imwrite(filepath, face_crop)
+                                    
+                                    # 2. Log to DB
+                                    unknown_person_callback(filepath, best_face.embedding)
+                                    self.logged_unknown_ids.add(tracker_id)
+                                    messages.append(f"Logged Unknown Person #{tracker_id}")
+                    else:
+                        label = f"Tracking #{tracker_id}"
+            
             labels.append(label)
         
         # Annotate frame

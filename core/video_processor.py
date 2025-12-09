@@ -41,7 +41,10 @@ class VideoProcessor:
         self.logged_unknown_ids = set()
 
     def process_frame(self, frame, mark_attendance_callback=None, unknown_person_callback=None):
-        """Process a single frame and return annotated frame with detections"""
+        """
+        Process a single frame for Face Recognition and Tracking.
+        Returns: (detections, labels, faces, messages)
+        """
         from config.config import PROCESS_EVERY_N_FRAMES, RESIZE_FACTOR
         
         # Initialize frame counter if not exists
@@ -174,16 +177,24 @@ class VideoProcessor:
             
             labels.append(label)
         
-        # Annotate frame
+        return tracked_detections, labels, faces, messages
+
+    def annotate_frame(self, frame, detections, labels, faces):
+        """
+        Draw bounding boxes, labels, and landmarks on the frame.
+        This allows the UI to draw on the *latest* frame using the *latest known* data.
+        """
+        # Annotate boxes and labels
         annotated_frame = self.box_annotator.annotate(
             scene=frame.copy(),
-            detections=tracked_detections,
+            detections=detections,
             labels=labels
         )
         
+        # Draw landmarks
         annotated_frame = self.draw_landmarks(annotated_frame, faces)
         
-        return annotated_frame, faces, tracked_detections, messages
+        return annotated_frame
     
     def calculate_iou(self, boxA, boxB):
         xA = max(boxA[0], boxB[0])

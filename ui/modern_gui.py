@@ -1,5 +1,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox, Toplevel, filedialog
+import threading
+import queue
 import cv2
 from PIL import Image, ImageTk
 import time
@@ -66,6 +68,13 @@ class FaceAttendancePro:
         self.camera_source_2 = tk.StringVar(value="Camera 1")
         
         self.scan_line_y = 0; self.scan_direction = 1; self.last_frame = None
+        
+        # Threading support
+        self.processing_lock = threading.Lock()
+        self.latest_results = {0: None, 1: None} # Stores (detections, labels, faces) for each camera index
+        self.log_queue = queue.Queue()
+        self.threads_running = False
+        self.processing_threads = []
 
         self.setup_ui()
         self.animate_pulse()
@@ -286,6 +295,14 @@ class FaceAttendancePro:
     def toggle_camera(self):
         if self.is_running:
             self.is_running = False
+            self.threads_running = False # Stop background threads
+            
+            # Wait for threads to join (non-blocking in UI, but good practice to allow cleanup)
+            # In a real GUI we might not want to block here, but for safety:
+            for t in self.processing_threads:
+                if t.is_alive(): t.join(timeout=0.2)
+            self.processing_threads = []
+
             for cap in self.caps:
                 if cap is not None: cap.release()
             self.caps = []
@@ -315,21 +332,19 @@ class FaceAttendancePro:
             def get_source_from_selection(selection_str):
                 """Parse dropdown selection to get video source"""
                 try:
+                    source = 0
                     if "Channel" in selection_str:
                         # RTSP Configured Camera
                         channel_num = selection_str.split(" ")[1]
                         base_url = get_config()['webcam_index']
-                        final_url = get_rtsp_url_with_channel(base_url, channel_num)
-                        return ThreadedCamera(final_url)
-                    
+                        source = get_rtsp_url_with_channel(base_url, channel_num)
                     elif "Webcam" in selection_str:
                         # Local Webcam
-                        idx = int(selection_str.split(" ")[1])
-                        return cv2.VideoCapture(idx)
+                        source = int(selection_str.split(" ")[1])
                     
-                    else:
-                        # Fallback for old values or manual input
-                        return cv2.VideoCapture(0)
+                    # ALWAYS return ThreadedCamera for smooth UI
+                    print(f"Opening ThreadedCamera({source})...")
+                    return ThreadedCamera(source)
                         
                 except Exception as e:
                     print(f"Error parsing source '{selection_str}': {e}")
@@ -353,12 +368,61 @@ class FaceAttendancePro:
                 messagebox.showerror("Error", "No cameras found"); return
 
             self.is_running = True
+            
+            # Start background processing threads
+            self.threads_running = True
+            self.latest_results = {0: None, 1: None}
+            
+            for i in range(len(self.caps)):
+                if self.caps[i]:
+                    t = threading.Thread(target=self.background_processing_loop, args=(i,))
+                    t.daemon = True
+                    t.start()
+                    self.processing_threads.append(t)
+
             self.cam_combo_1['state'] = 'disabled'
             self.cam_combo_2['state'] = 'disabled'
             self.btn_cam_toggle.config(text="STOP CAMERAS", bg=COLORS['danger'])
             self.btn_pause.config(state="normal") # Enable pause button
             self.lbl_status.config(text="SYSTEM ONLINE", fg=COLORS['success'])
             self.update_video_loop()
+
+    def background_processing_loop(self, cam_index):
+        """Background thread to run heavy face recognition"""
+        # Select processor
+        processor = self.processor if cam_index == 0 else self.processor2
+        cap = self.caps[cam_index]
+        
+        while self.threads_running and self.is_running:
+            if cap is None: break
+            
+            # Read latest frame
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                time.sleep(0.01)
+                continue
+            
+            # Run Heavy Processing
+            # Returns: (detections, labels, faces, messages)
+            try:
+                detections, labels, faces, messages = processor.process_frame(
+                    frame, 
+                    mark_attendance_callback=self.tracker.process_recognized_face,
+                    unknown_person_callback=self.tracker.process_unknown_person
+                )
+                
+                # Queue messages for main thread
+                for msg in messages:
+                    self.log_queue.put(msg)
+                
+                # Store visualization data safely
+                with self.processing_lock:
+                    self.latest_results[cam_index] = (detections, labels, faces)
+            except Exception as e:
+                print(f"Processing Error Cam {cam_index}: {e}")
+            
+            # Small sleep to yield CPU if processing is super fast (prevents 100% CPU on empty loops)
+            time.sleep(0.001)
 
     def toggle_pause(self):
         """Toggle the pause state of the dashboard video feed"""
@@ -376,55 +440,61 @@ class FaceAttendancePro:
     def update_video_loop(self):
         if not self.is_running: return
         
-        frames = []
+        # We only READ frames here for display. Processing happens in background.
+        
         for i, cap in enumerate(self.caps):
-            if cap is not None:
-                ret, frame = cap.read()
-                frames.append(frame if ret else None)
-            else:
-                frames.append(None)
+            if cap is None: continue
+            
+            # 1. Get Instant Frame (Non-blocking)
+            ret, frame = cap.read()
+            if not ret or frame is None:
+                if i == 0: self.video_label_1.configure(image="", text="No Signal")
+                else: self.video_label_2.configure(image="", text="No Signal")
+                continue
 
-        if self.current_view == "dashboard":
-            # Process Camera 1
-            if frames[0] is not None:
-                annotated_frame1, _, _, messages1 = self.processor.process_frame(
-                    frames[0], 
-                    mark_attendance_callback=self.tracker.process_recognized_face,
-                    unknown_person_callback=self.tracker.process_unknown_person
-                )
-                for msg in messages1: self.log_list.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {msg}")
+            # 2. Get Latest Processing Results (Instant)
+            results = None
+            with self.processing_lock:
+                results = self.latest_results.get(i)
+            
+            # 3. Annotate Frame (Fast drawing)
+            annotated_frame = frame
+            
+            if results:
+                detections, labels, faces = results
                 
-                if not self.is_paused:
-                    img1 = Image.fromarray(cv2.cvtColor(annotated_frame1, cv2.COLOR_BGR2RGB))
-                    # Resize to fit half screen roughly
-                    img1.thumbnail((640, 480)) 
-                    imgtk1 = ImageTk.PhotoImage(image=img1)
-                    self.video_label_1.imgtk = imgtk1; self.video_label_1.configure(image=imgtk1, text="")
-            else:
-                self.video_label_1.configure(image="", text="Cam 1 No Signal")
+                # Use the processor's drawing method
+                processor = self.processor if i == 0 else self.processor2
+                annotated_frame = processor.annotate_frame(frame, detections, labels, faces)
+            
+            # Flush Logs
+            while not self.log_queue.empty():
+                try:
+                    msg = self.log_queue.get_nowait()
+                    self.log_list.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {msg}")
+                except: break
 
-            # Process Camera 2
-            if len(frames) > 1 and frames[1] is not None:
-                annotated_frame2, _, _, messages2 = self.processor2.process_frame(
-                    frames[1], 
-                    mark_attendance_callback=self.tracker.process_recognized_face,
-                    unknown_person_callback=self.tracker.process_unknown_person
-                )
-                for msg in messages2: self.log_list.insert(0, f"{datetime.now().strftime('%H:%M:%S')} - {msg}")
+            # 4. Display
+            if not self.is_paused:
+                img = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
+                img.thumbnail((640, 480))
+                imgtk = ImageTk.PhotoImage(image=img)
                 
-                if not self.is_paused:
-                    img2 = Image.fromarray(cv2.cvtColor(annotated_frame2, cv2.COLOR_BGR2RGB))
-                    img2.thumbnail((640, 480))
-                    imgtk2 = ImageTk.PhotoImage(image=img2)
-                    self.video_label_2.imgtk = imgtk2; self.video_label_2.configure(image=imgtk2, text="")
-            else:
-                self.video_label_2.configure(image="", text="Cam 2 No Signal")
+                if i == 0:
+                    self.video_label_1.imgtk = imgtk
+                    self.video_label_1.configure(image=imgtk, text="")
+                elif i == 1:
+                    self.video_label_2.imgtk = imgtk
+                    self.video_label_2.configure(image=imgtk, text="")
 
-            if int(time.time())%2==0: 
+        # Update stats occasionally
+        if int(time.time())%2==0 and self.current_view == "dashboard": 
+            try:
                 s = self.db.get_statistics()
                 self.card_total.config(text=str(s['total_persons'])); self.card_present.config(text=str(s['present_today']))
+            except: pass
                 
-        self.root.after(10, self.update_video_loop)
+        self.root.after(30, self.update_video_loop) # Target ~30 FPS
 
     def perform_registration(self):
         pid = self.reg_entries["Person ID (Unique)"].get()

@@ -25,10 +25,18 @@ from core.camera import ThreadedCamera
 from config.config import get_config
 
 # --- THEME COLORS ---
+# --- MODERN THEME COLORS ---
 COLORS = {
-    'bg': '#1e1e2e', 'sidebar': '#181825', 'card': '#313244',
-    'text': '#cdd6f4', 'accent': '#89b4fa', 'success': '#a6e3a1',
-    'warning': '#f9e2af', 'danger': '#f38ba8', 'hover': '#45475a'
+    'bg': '#0f172a',        # Deep Slate (Background)
+    'sidebar': '#1e293b',   # Slate (Sidebar)
+    'card': '#334155',      # Light Slate (Card/Containers)
+    'text': '#f1f5f9',      # White-ish
+    'text_dim': '#94a3b8',  # Dimmed text
+    'accent': '#38bdf8',    # Sky Blue
+    'success': '#22c55e',   # Green
+    'warning': '#f59e0b',   # Amber
+    'danger': '#ef4444',    # Red
+    'hover': '#475569'      # Hover Color
 }
 
 class ModernButton(tk.Button):
@@ -36,13 +44,26 @@ class ModernButton(tk.Button):
         self.default_bg = kw.get('bg', COLORS['card'])
         self.hover_bg = kw.get('activebackground', COLORS['accent'])
         self.default_fg = kw.get('fg', COLORS['text'])
-        self.hover_fg = '#1e1e2e'
-        kw['relief'] = 'flat'; kw['borderwidth'] = 0; kw['cursor'] = 'hand2'
-        kw['font'] = ("Segoe UI", 10, "bold")
+        self.hover_fg = '#0f172a' # Dark text on hover
+        
+        kw['relief'] = 'flat'
+        kw['borderwidth'] = 0
+        kw['cursor'] = 'hand2'
+        kw['font'] = ("Segoe UI", 11, "bold")
+        kw['activeforeground'] = self.hover_fg
+        kw['activebackground'] = self.hover_bg
+        
         super().__init__(master, **kw)
-        self.bind("<Enter>", self.on_enter); self.bind("<Leave>", self.on_leave)
-    def on_enter(self, e): self['bg'] = self.hover_bg; self['fg'] = self.hover_fg
-    def on_leave(self, e): self['bg'] = self.default_bg; self['fg'] = self.default_fg
+        self.bind("<Enter>", self.on_enter)
+        self.bind("<Leave>", self.on_leave)
+        
+    def on_enter(self, e): 
+        self['bg'] = self.hover_bg
+        self['fg'] = self.hover_fg
+        
+    def on_leave(self, e): 
+        self['bg'] = self.default_bg
+        self['fg'] = self.default_fg
 
 class FaceAttendancePro:
     def __init__(self, root):
@@ -118,25 +139,41 @@ class FaceAttendancePro:
         tk.Label(h, text="Dashboard", font=("Segoe UI", 24, "bold"), bg=COLORS['bg'], fg=COLORS['text']).pack(side="left")
         self.lbl_status = tk.Label(h, text="SYSTEM OFFLINE", font=("Segoe UI", 12, "bold"), bg=COLORS['bg'], fg=COLORS['danger']); self.lbl_status.pack(side="right")
         
-        st = tk.Frame(self.frame_dashboard, bg=COLORS['bg']); st.pack(fill="x", pady=(0, 20))
+        # Stats Row
+        st = tk.Frame(self.frame_dashboard, bg=COLORS['bg'])
+        st.pack(fill="x", pady=(0, 20))
         self.card_total = self.create_stat_card(st, "Total Registered", "0", "users")
         self.card_present = self.create_stat_card(st, "Present Today", "0", "check")
         
-        c = tk.Frame(self.frame_dashboard, bg=COLORS['card'], padx=10, pady=10); c.pack(fill="x", pady=(0, 10))
+        # Camera Controls Container
+        c = tk.Frame(self.frame_dashboard, bg=COLORS['card'], padx=15, pady=15)
+        c.pack(fill="x", pady=(0, 15))
         
-        # Camera Options: Channels 1-16 (RTSP) + Webcams 0-4 (Local)
+        # Camera Options (Styled)
         cam_options = [f"Channel {i}" for i in range(1, 17)] + [f"Webcam {i}" for i in range(5)]
         
-        tk.Label(c, text="Cam 1:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left")
+        # Left Group
+        cam_grp = tk.Frame(c, bg=COLORS['card'])
+        cam_grp.pack(side="left")
+        
+        # Label 1
+        tk.Label(cam_grp, text="PRIMARY CAMERA", font=("Segoe UI", 8, "bold"), bg=COLORS['card'], fg=COLORS['text_dim']).pack(anchor="w")
         self.camera_source_1 = tk.StringVar(value="Channel 1")
-        self.cam_combo_1 = ttk.Combobox(c, textvariable=self.camera_source_1, values=cam_options, width=15); self.cam_combo_1.pack(side="left", padx=5)
+        self.cam_combo_1 = ttk.Combobox(cam_grp, textvariable=self.camera_source_1, values=cam_options, width=18)
+        self.cam_combo_1.pack(pady=(2,0))
         
-        tk.Label(c, text="Cam 2:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left", padx=(10,0))
+        # Spacer
+        tk.Frame(cam_grp, bg=COLORS['card'], width=20).pack(side="left") # Spacer hack if packing horizontally
+        
+        # Label 2
+        cam_grp2 = tk.Frame(c, bg=COLORS['card']); cam_grp2.pack(side="left", padx=20)
+        tk.Label(cam_grp2, text="SECONDARY CAMERA", font=("Segoe UI", 8, "bold"), bg=COLORS['card'], fg=COLORS['text_dim']).pack(anchor="w")
         self.camera_source_2 = tk.StringVar(value="Channel 2")
-        self.cam_combo_2 = ttk.Combobox(c, textvariable=self.camera_source_2, values=cam_options, width=15); self.cam_combo_2.pack(side="left", padx=5)
+        self.cam_combo_2 = ttk.Combobox(cam_grp2, textvariable=self.camera_source_2, values=cam_options, width=18)
+        self.cam_combo_2.pack(pady=(2,0))
         
-        self.btn_cam_toggle = ModernButton(c, text="START CAMERAS", command=self.toggle_camera, bg=COLORS['accent'], fg="#1e1e2e"); self.btn_cam_toggle.pack(side="right")
-        self.btn_pause = ModernButton(c, text="PAUSE", command=self.toggle_pause, bg=COLORS['warning'], fg="#1e1e2e", state="disabled"); self.btn_pause.pack(side="right", padx=10)
+        self.btn_cam_toggle = ModernButton(c, text="START CAMERAS", command=self.toggle_camera, bg=COLORS['accent'], fg="#0f172a", width=15); self.btn_cam_toggle.pack(side="right")
+        self.btn_pause = ModernButton(c, text="PAUSE", command=self.toggle_pause, bg=COLORS['warning'], fg="#0f172a", state="disabled", width=10); self.btn_pause.pack(side="right", padx=10)
         
         g = tk.Frame(self.frame_dashboard, bg=COLORS['bg']); g.pack(fill="both", expand=True)
         f1 = tk.Frame(g, bg="black"); f1.pack(side="left", fill="both", expand=True, padx=(0,5))
@@ -151,11 +188,19 @@ class FaceAttendancePro:
         self.canvas_pulse = tk.Canvas(self.root, width=0, height=0); self.pulse_circle = self.canvas_pulse.create_oval(0,0,0,0)
 
     def create_stat_card(self, parent, title, value, icon):
-        card = tk.Frame(parent, bg=COLORS['card'], padx=15, pady=15); card.pack(side="left", fill="x", expand=True, padx=5)
-        tk.Label(card, text="●", font=("Segoe UI", 20), bg=COLORS['card'], fg=COLORS['accent']).pack(side="left", padx=(0, 15))
-        info = tk.Frame(card, bg=COLORS['card']); info.pack(side="left")
-        tk.Label(info, text=title, font=("Segoe UI", 9), bg=COLORS['card'], fg="#a6adc8").pack(anchor="w")
-        lbl = tk.Label(info, text=value, font=("Segoe UI", 16, "bold"), bg=COLORS['card'], fg=COLORS['text']); lbl.pack(anchor="w")
+        card = tk.Frame(parent, bg=COLORS['card'], padx=20, pady=20)
+        card.pack(side="left", fill="x", expand=True, padx=10)
+        
+        # Icon/color strip
+        strip = tk.Frame(card, bg=COLORS['accent'], width=5)
+        strip.pack(side="left", fill="y", padx=(0, 15))
+        
+        info = tk.Frame(card, bg=COLORS['card'])
+        info.pack(side="left")
+        
+        tk.Label(info, text=title.upper(), font=("Segoe UI", 9, "bold"), bg=COLORS['card'], fg=COLORS['text_dim']).pack(anchor="w")
+        lbl = tk.Label(info, text=value, font=("Segoe UI", 24, "bold"), bg=COLORS['card'], fg=COLORS['text'])
+        lbl.pack(anchor="w")
         return lbl
 
     def setup_registration(self):
@@ -171,14 +216,14 @@ class FaceAttendancePro:
         self.reg_entries = {}
         for field in ["Person ID (Unique)", "Full Name", "Email (Optional)", "Department (Optional)"]:
             tk.Label(form, text=field, bg=COLORS['card'], fg=COLORS['text']).pack(anchor="w", pady=(5, 2))
-            e = tk.Entry(form, bg="#45475a", fg="white", relief="flat", font=("Segoe UI", 11))
+            e = tk.Entry(form, bg=COLORS['sidebar'], fg="white", relief="flat", font=("Segoe UI", 11))
             e.pack(fill="x", ipady=5); self.reg_entries[field] = e
             
         shift_fr = tk.Frame(form, bg=COLORS['card']); shift_fr.pack(fill="x", pady=15)
         tk.Label(shift_fr, text="Start:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left")
-        self.entry_shift_start = tk.Entry(shift_fr, bg="#45475a", fg="white", width=6, relief="flat"); self.entry_shift_start.insert(0,"09:00"); self.entry_shift_start.pack(side="left", padx=5)
+        self.entry_shift_start = tk.Entry(shift_fr, bg=COLORS['sidebar'], fg="white", width=6, relief="flat"); self.entry_shift_start.insert(0,"09:00"); self.entry_shift_start.pack(side="left", padx=5)
         tk.Label(shift_fr, text="End:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left", padx=(10,0))
-        self.entry_shift_end = tk.Entry(shift_fr, bg="#45475a", fg="white", width=6, relief="flat"); self.entry_shift_end.insert(0,"18:00"); self.entry_shift_end.pack(side="left", padx=5)
+        self.entry_shift_end = tk.Entry(shift_fr, bg=COLORS['sidebar'], fg="white", width=6, relief="flat"); self.entry_shift_end.insert(0,"18:00"); self.entry_shift_end.pack(side="left", padx=5)
 
         btn_fr = tk.Frame(form, bg=COLORS['card']); btn_fr.pack(fill="x", pady=20)
         ModernButton(btn_fr, text="CAPTURE & SAVE", command=self.perform_registration, bg=COLORS['success'], fg="#1e1e2e").pack(fill="x", pady=5)
@@ -210,61 +255,102 @@ class FaceAttendancePro:
         self.btn_logs = ModernButton(top, text="Detailed Logs", command=lambda: self.switch_record_view("logs"), bg=COLORS['card'], fg=COLORS['text'], width=15); self.btn_logs.pack(side="left", padx=(0,5))
         self.btn_edit = ModernButton(top, text="Edit Database", command=lambda: self.switch_record_view("edit"), bg=COLORS['card'], fg=COLORS['text'], width=15); self.btn_edit.pack(side="left", padx=(0,5))
 
-        search = tk.Frame(self.frame_records, bg=COLORS['card'], padx=5, pady=5); search.pack(fill="x", pady=5)
-        tk.Label(search, text="Report ID:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left")
-        self.entry_search_id = tk.Entry(search, bg="#45475a", fg="white", relief="flat", width=10); self.entry_search_id.pack(side="left", padx=5)
-        ModernButton(search, text="Generate Report", command=self.search_person_stats, bg=COLORS['accent'], fg="#1e1e2e").pack(side="left", padx=10)
+        # search = tk.Frame(self.frame_records, bg=COLORS['card'], padx=5, pady=5); search.pack(fill="x", pady=5)
+        # tk.Label(search, text="Report ID:", bg=COLORS['card'], fg=COLORS['text']).pack(side="left")
+        # self.entry_search_id = tk.Entry(search, bg=COLORS['sidebar'], fg="white", relief="flat", width=10); self.entry_search_id.pack(side="left", padx=5)
+        # ModernButton(search, text="Generate Report", command=self.search_person_stats, bg=COLORS['accent'], fg="#0f172a").pack(side="left", padx=10)
 
+        # --- REPORT GENERATION PANEL ---
+        # Data Management Row
         act = tk.Frame(self.frame_records, bg=COLORS['bg']); act.pack(fill="x", pady=5)
-        ModernButton(act, text="Refresh", command=self.load_records, bg=COLORS['success'], fg="#1e1e2e", width=10).pack(side="left")
-        ModernButton(act, text="Export CSV", command=self.export_csv, bg=COLORS['warning'], fg="#1e1e2e", width=10).pack(side="left", padx=5)
-        self.btn_edit_sel = ModernButton(act, text="EDIT", command=self.open_edit_dialog, bg=COLORS['accent'], fg="#1e1e2e", width=10)
-        self.btn_del_sel = ModernButton(act, text="DELETE", command=self.delete_selected_person, bg=COLORS['danger'], fg="#1e1e2e", width=10)
-
-        style = ttk.Style(); style.theme_use("clam")
-        style.configure("Treeview", background=COLORS['card'], fieldbackground=COLORS['card'], foreground=COLORS['text'], rowheight=25, borderwidth=0)
-        style.configure("Treeview.Heading", background=COLORS['sidebar'], foreground=COLORS['text'], borderwidth=0, font=("Segoe UI", 10, "bold"))
-        self.tree = ttk.Treeview(self.frame_records, show="headings", selectmode="browse"); self.tree.pack(fill="both", expand=True)
+        ModernButton(act, text="REFRESH LIST", command=self.load_records, bg=COLORS['success'], fg="#1e1e2e", width=12).pack(side="left")
+        
+        self.btn_edit_sel = ModernButton(act, text="EDIT SELECTED", command=self.open_edit_dialog, bg=COLORS['accent'], fg="#0f172a", width=15)
+        self.btn_del_sel = ModernButton(act, text="DELETE SELECTED", command=self.delete_selected_person, bg=COLORS['danger'], fg="#0f172a", width=15)
         
         # --- REPORT GENERATION PANEL ---
-        report_frame = tk.Frame(self.frame_records, bg=COLORS['sidebar'], padx=10, pady=10)
+        report_frame = tk.Frame(self.frame_records, bg=COLORS['card'], padx=15, pady=15) # Changed bg to card for prominence
         report_frame.pack(fill="x", pady=10)
         
-        tk.Label(report_frame, text="Generate Reports", font=("Segoe UI", 12, "bold"), bg=COLORS['sidebar'], fg=COLORS['accent']).pack(anchor="w", pady=(0, 5))
+        tk.Label(report_frame, text="Generate Reports", font=("Segoe UI", 12, "bold"), bg=COLORS['card'], fg=COLORS['accent']).pack(anchor="w", pady=(0, 10))
         
         # Controls Row
-        controls = tk.Frame(report_frame, bg=COLORS['sidebar'])
+        controls = tk.Frame(report_frame, bg=COLORS['card'])
         controls.pack(fill="x")
         
+        # Helper for input groups
+        def mk_input(parent, label):
+            f = tk.Frame(parent, bg=COLORS['card']); f.pack(side="left", padx=(0, 15))
+            tk.Label(f, text=label, font=("Segoe UI", 9), bg=COLORS['card'], fg=COLORS['text_dim']).pack(anchor="w")
+            return f
+            
         # Report Type
-        tk.Label(controls, text="Type:", bg=COLORS['sidebar'], fg=COLORS['text']).pack(side="left")
-        self.report_type = ttk.Combobox(controls, values=["Daily", "Weekly", "Monthly", "Yearly", "Custom"], state="readonly", width=10)
+        grp_type = mk_input(controls, "REPORT TYPE")
+        self.report_type = ttk.Combobox(grp_type, values=["Daily", "Weekly", "Monthly", "Yearly", "Custom"], state="readonly", width=12)
         self.report_type.current(0)
-        self.report_type.pack(side="left", padx=5)
+        self.report_type.pack()
         self.report_type.bind("<<ComboboxSelected>>", self.update_report_dates)
         
         # Date Range
-        tk.Label(controls, text="From:", bg=COLORS['sidebar'], fg=COLORS['text']).pack(side="left", padx=(10, 0))
-        self.entry_date_start = tk.Entry(controls, bg=COLORS['card'], fg="white", width=12, relief="flat")
-        self.entry_date_start.pack(side="left", padx=5)
+        grp_start = mk_input(controls, "FROM DATE")
+        self.entry_date_start = tk.Entry(grp_start, bg=COLORS['sidebar'], fg="white", width=12, relief="flat", font=("Segoe UI", 10))
+        self.entry_date_start.pack(ipady=2)
         
-        tk.Label(controls, text="To:", bg=COLORS['sidebar'], fg=COLORS['text']).pack(side="left")
-        self.entry_date_end = tk.Entry(controls, bg=COLORS['card'], fg="white", width=12, relief="flat")
-        self.entry_date_end.pack(side="left", padx=5)
+        grp_end = mk_input(controls, "TO DATE")
+        self.entry_date_end = tk.Entry(grp_end, bg=COLORS['sidebar'], fg="white", width=12, relief="flat", font=("Segoe UI", 10))
+        self.entry_date_end.pack(ipady=2)
         
         # Person Filter
-        tk.Label(controls, text="Person ID:", bg=COLORS['sidebar'], fg=COLORS['text']).pack(side="left", padx=(10, 0))
-        self.entry_report_id = tk.Entry(controls, bg=COLORS['card'], fg="white", width=10, relief="flat")
+        grp_filter = mk_input(controls, "FILTER ID (OR 'All')")
+        self.entry_report_id = tk.Entry(grp_filter, bg=COLORS['sidebar'], fg="white", width=12, relief="flat", font=("Segoe UI", 10))
         self.entry_report_id.insert(0, "All")
-        self.entry_report_id.pack(side="left", padx=5)
+        self.entry_report_id.pack(ipady=2)
         
         # Buttons
-        ModernButton(controls, text="PDF Report", command=lambda: self.generate_report("pdf"), bg=COLORS['danger'], fg="#1e1e2e", width=10).pack(side="right", padx=5)
-        ModernButton(controls, text="CSV Report", command=lambda: self.generate_report("csv"), bg=COLORS['success'], fg="#1e1e2e", width=10).pack(side="right")
+        btn_grp = tk.Frame(controls, bg=COLORS['card']); btn_grp.pack(side="right", anchor="s")
+        ModernButton(btn_grp, text="DOWNLOAD CSV", command=lambda: self.generate_report("csv"), bg=COLORS['success'], fg="#0f172a", width=15).pack(side="right")
+        ModernButton(btn_grp, text="DOWNLOAD PDF", command=lambda: self.generate_report("pdf"), bg=COLORS['danger'], fg="#0f172a", width=15).pack(side="right", padx=10)
 
-        self.update_report_dates(None) # Init dates
+        style = ttk.Style(); style.theme_use("clam")
         
+        # Configure Treeview for "Shell/Table" look (Grid lines, distinct rows)
+        style.configure("Treeview", 
+            background=COLORS['card'], 
+            fieldbackground=COLORS['card'], 
+            foreground=COLORS['text'], 
+            rowheight=30, # Taller rows
+            borderwidth=1, 
+            relief="solid"
+        )
+        
+        style.configure("Treeview.Heading", 
+            background=COLORS['sidebar'], 
+            foreground=COLORS['text'], 
+            borderwidth=1, 
+            relief="raised",
+            font=("Segoe UI", 10, "bold")
+        )
+        
+        # Modify the layout to show borders if possible, but "clam" handles basics well.
+        # We will use tags for alternating colors in load_records.
+        style.map("Treeview", background=[('selected', COLORS['accent'])], foreground=[('selected', '#0f172a')])
+
+        self.tree = ttk.Treeview(self.frame_records, show="headings", selectmode="browse")
+        self.tree.pack(fill="both", expand=True, pady=5)
+        
+        # Configure tags for striped rows
+        self.tree.tag_configure('odd', background=COLORS['card'])
+        self.tree.tag_configure('even', background=COLORS['hover']) # Slightly lighter/different for striping
+
+        
+        
+        
+        # Date Range
+        
+        self.update_report_dates(None) # Init dates
         self.switch_record_view("summary")
+
+
 
     def switch_record_view(self, mode):
         self.record_view_mode = mode
@@ -288,10 +374,17 @@ class FaceAttendancePro:
 
     def load_records(self):
         for item in self.tree.get_children(): self.tree.delete(item)
+        
         if self.record_view_mode == "summary": recs = self.db.get_today_attendance()
         elif self.record_view_mode == "logs": recs = self.db.get_recent_logs()
         elif self.record_view_mode == "edit": recs = self.db.get_all_persons_details()
-        for r in recs: self.tree.insert("", "end", values=r)
+        else: recs = []
+        
+        count = 0
+        for r in recs:
+            tag = 'even' if count % 2 == 0 else 'odd'
+            self.tree.insert("", "end", values=r, tags=(tag,))
+            count += 1
 
     def toggle_camera(self):
         if self.is_running:
@@ -492,9 +585,14 @@ class FaceAttendancePro:
                 except: break
 
             # 4. Display
+            # 4. Display Optimized
             if not self.is_paused:
-                img = Image.fromarray(cv2.cvtColor(annotated_frame, cv2.COLOR_BGR2RGB))
-                img.thumbnail((640, 480))
+                # Resize using OpenCV (Much faster than PIL)
+                # target width=640, height=480 (standard VGA)
+                frame_resized = cv2.resize(annotated_frame, (640, 480), interpolation=cv2.INTER_LINEAR)
+                
+                # Convert to RGB for Tkinter
+                img = Image.fromarray(cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB))
                 imgtk = ImageTk.PhotoImage(image=img)
                 
                 if i == 0:

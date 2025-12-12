@@ -32,9 +32,9 @@ pip install -r requirements.txt
 
 ✅ 4. Install InsightFace (Local Wheel File)
 
-If the insightface-0.7.3-cp310-cp310-win_amd64.whl file is in your project directory, install it:
+If the insightface-0.7.3-cp311-cp311-win_amd64.whl file is in your project directory, install it:
 
-pip install insightface-0.7.3-cp310-cp310-win_amd64.whl
+pip install insightface-0.7.3-cp311-cp311-win_amd64.whl
 
 ✅ 5. Verify Installation
 

@@ -4,24 +4,41 @@ import os
 from insightface.app import FaceAnalysis
 
 # ADD THIS LINE at the top to import configuration variables
-from config.config import SIMILARITY_THRESHOLD, FACE_DETECTION_MODEL, DETECTION_SIZE 
-# You should also update SIMILARITY_THRESHOLD here if you are using db_manager
+from config.config import (
+    SIMILARITY_THRESHOLD, FACE_DETECTION_MODEL, DETECTION_SIZE,
+    FACE_DETECTION_BACKEND, DNN_PROTO_PATH, DNN_MODEL_PATH, DNN_CONFIDENCE_THRESHOLD
+)
+
+class Face:
+    """Generic Face object to standardize results between backends"""
+    def __init__(self, bbox, det_score, embedding=None, kps=None):
+        self.bbox = bbox # [x1, y1, x2, y2]
+        self.det_score = det_score
+        self.embedding = embedding
+        self.kps = kps
 
 class FaceRecognitionHandler:
-    # You can remove similarity_threshold=0.6 from the arguments and use the config value
     def __init__(self, db_manager): 
-        # Initialize InsightFace
+        # Initialize InsightFace (Always needed for Recognition/Registration)
         self.app = FaceAnalysis(
-            # Ensure it uses the variable from config.py
             name=FACE_DETECTION_MODEL, 
             providers=['CUDAExecutionProvider', 'CPUExecutionProvider']
         )
-        
-        # CHANGE THIS LINE: Use the DETECTION_SIZE variable from config.py
         self.app.prepare(ctx_id=0, det_size=DETECTION_SIZE)
         
+        # Initialize OpenCV DNN if backend selected
+        self.backend = FACE_DETECTION_BACKEND
+        self.net = None
+        if self.backend == 'opencv_dnn':
+            try:
+                print(f"Loading OpenCV DNN Model from {DNN_MODEL_PATH}...")
+                self.net = cv2.dnn.readNetFromCaffe(DNN_PROTO_PATH, DNN_MODEL_PATH)
+                print("OpenCV DNN loaded successfully.")
+            except Exception as e:
+                print(f"Error loading OpenCV DNN: {e}. Fallback to InsightFace.")
+                self.backend = 'insightface'
+
         self.db_manager = db_manager
-        # Use the config threshold for consistency
         self.similarity_threshold = SIMILARITY_THRESHOLD 
         self.registered_faces = self.load_face_encodings()
 
@@ -30,12 +47,53 @@ class FaceRecognitionHandler:
 
     
     def detect_faces(self, frame):
-        """Detect faces in a frame"""
-        faces = self.app.get(frame)
+        """Detect faces in a frame using selected backend"""
+        if self.backend == 'opencv_dnn' and self.net:
+            return self._detect_faces_opencv(frame)
+        else:
+            return self.app.get(frame)
+
+    def _detect_faces_opencv(self, frame):
+        """Internal method for OpenCV DNN detection"""
+        (h, w) = frame.shape[:2]
+        # Resize to 640x640 (standard SD resolution) for better small/multi face detection
+        # The model is trained on 300x300 but works better at higher res for small faces
+        TARGET_SIZE = (640, 640) 
+        
+        blob = cv2.dnn.blobFromImage(cv2.resize(frame, TARGET_SIZE), 1.0,
+            TARGET_SIZE, (104.0, 177.0, 123.0))
+        
+        self.net.setInput(blob)
+        detections = self.net.forward()
+        
+        faces = []
+        for i in range(0, detections.shape[2]):
+            confidence = detections[0, 0, i, 2]
+            
+            # Lower default threshold slightly to catch more faces (filtered later by track thresh if needed)
+            if confidence > 0.4: 
+                box = detections[0, 0, i, 3:7] * np.array([w, h, w, h])
+                (startX, startY, endX, endY) = box.astype("int")
+                
+                # Ensure within bounds
+                startX = max(0, startX)
+                startY = max(0, startY)
+                endX = min(w, endX)
+                endY = min(h, endY)
+                
+                # Create Face object (Standardized)
+                f = Face(bbox=np.array([startX, startY, endX, endY]), det_score=confidence)
+                faces.append(f)
+                
         return faces
     
     def extract_face_encoding(self, frame):
-        """Extract face encoding from a frame"""
+        """
+        Extract face encoding from a frame. 
+        Uses InsightFace pipeline regardless of detection backend 
+        because we need the embedding model.
+        """
+        # Note: app.get() does detection + recognition
         faces = self.app.get(frame)
         
         if len(faces) == 0:

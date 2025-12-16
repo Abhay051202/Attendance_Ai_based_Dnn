@@ -41,3 +41,32 @@ pip install insightface-0.7.3-cp311-cp311-win_amd64.whl
 To confirm that InsightFace and other packages are correctly installed:
 
 pip show insightface
+
+✅ 6. Setup Face Detection Models (Essential)
+
+This system now supports multiple detection backends (InsightFace & OpenCV DNN). You must download the required models:
+
+python download_models.py
+
+✅ 7. Configuration & Features
+
+You can customize the system in `config/config.py`:
+
+**Enable Score Overlay (Visual Confidence Scores)**
+```python
+SHOW_DETECTION_SCORE = True
+```
+
+**Switch Face Detection Mode**
+- `insightface` (Default): High accuracy, modern models.
+- `opencv_dnn`: Higher speed, uses ResNet-10 (good for CPU).
+```python
+FACE_DETECTION_BACKEND = 'insightface' # or 'opencv_dnn'
+```
+
+✅ 8. Run the Application
+
+Start the attendance system:
+
+python ui/modern_gui.py
+

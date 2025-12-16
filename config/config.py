@@ -16,7 +16,7 @@ Configuration file for Face Recognition Attendance System
 MYSQL_CONFIG = {
     'user': 'team',
     'password': 'Team@123',
-    'host': '192.168.1.106',  
+    'host': '192.168.1.101',  
     'port': 3306,
     'database': 'demo',
 }
@@ -53,10 +53,24 @@ DETECTION_SIZE = (1024, 1024)
 FACE_DETECTION_MODEL = 'buffalo_l' 
 
 # Execution Providers (GPU/CPU)
+# Execution Providers (GPU/CPU)
 EXECUTION_PROVIDERS = [
     'CUDAExecutionProvider',
     'CPUExecutionProvider'
 ]
+
+# Detection Backend Configuration
+# Options: 'insightface' (Default, Accurate) | 'opencv_dnn' (Faster, Less Accurate)
+FACE_DETECTION_BACKEND = 'insightface' 
+# FACE_DETECTION_BACKEND = 'opencv_dnn'
+
+# OpenCV DNN Model Paths
+DNN_PROTO_PATH = 'data/models/deploy.prototxt'
+DNN_MODEL_PATH = 'data/models/res10_300x300_ssd_iter_140000.caffemodel'
+DNN_CONFIDENCE_THRESHOLD = 0.5
+
+# Visual Settings
+SHOW_DETECTION_SCORE = True   # Enable "Score" overlay (0.95, etc.)
 
 # ByteTrack Configuration
 TRACK_ACTIVATION_THRESHOLD = 0.5  
@@ -78,7 +92,7 @@ DISPLAY_INFO_PANEL = True
 
 # Performance Optimization
 PROCESS_EVERY_N_FRAMES = 5    # Run Face AI every Nth frame (Increase if laggy)
-RESIZE_FACTOR = 0.5           # Resize frame for AI (0.5 = 50% size, faster)         
+RESIZE_FACTOR = 0.8           # Resize frame for AI (0.8 = 80% size, better for detection)         
 
 # Annotation Settings
 BOX_THICKNESS = 2
@@ -129,6 +143,11 @@ def get_config():
         'display_fps': DISPLAY_FPS,
         'process_every_n_frames': PROCESS_EVERY_N_FRAMES,
         'resize_factor': RESIZE_FACTOR,
+        'face_detection_backend': FACE_DETECTION_BACKEND,
+        'dnn_proto_path': DNN_PROTO_PATH,
+        'dnn_model_path': DNN_MODEL_PATH,
+        'dnn_confidence_threshold': DNN_CONFIDENCE_THRESHOLD,
+        'show_detection_score': SHOW_DETECTION_SCORE,
     }
 
 def validate_config():

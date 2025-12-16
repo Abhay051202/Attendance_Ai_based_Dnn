@@ -1,43 +1,27 @@
 # Face Recognition Attendance System - Requirements
-# Install all dependencies with: pip install -r requirements.txt
+# Install: pip install -r requirements.txt
 
-# Core Dependencies
-numpy>=1.24.0,<2.0.0
+# --- CORE LIBRARIES ---
+numpy>=1.24.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
 
-# Computer Vision & Face Recognition
-opencv-python==4.8.1.78
-# Note: InsightFace must be installed from local wheel file
-# insightface-0.7.3-cp310-cp310-win_amd64.whl
-onnxruntime==1.16.3
-supervision==0.16.0
+# --- FACE RECOGNITION ---
+# Note: For InsightFace on Windows, you may need a specific wheel or "pip install insightface"
+insightface>=0.7.3
+onnxruntime-gpu>=1.16.0; sys_platform == 'win32' # Recommended for NVIDIA GPU
+onnxruntime>=1.16.0; sys_platform != 'win32'     # CPU fallback
 
-# Web Framework & API
-Flask==3.0.0
-Flask-Cors==4.0.0
+# --- TRACKING & UTILS ---
+supervision>=0.16.0
+requests>=2.31.0
 
-# Database
+# --- DATABASE ---
 mysql-connector-python>=8.0.0
 
-# Image Processing
-Pillow==10.1.0
+# --- GUI ---
+# tkinter is built-in, no install needed
 
-# Machine Learning
-scikit-learn==1.3.2
-
-# Text-to-Speech
-pyttsx3==2.90
-
-# PDF Generation
-reportlab>=4.0.0
-
-# Additional Python Standard Libraries (usually pre-installed)
-# - pickle (built-in)
-# - base64 (built-in)
-# - datetime (built-in)
-# - csv (built-in)
-# - json (built-in)
-# - os (built-in)
-# - threading (built-in)
-# - typing (built-in)
-# - smtplib (built-in)
-# - email (built-in)
+# --- EXTRAS ---
+pyttsx3>=2.90        # Text-to-Speech
+reportlab>=4.0.0     # PDF Generation
